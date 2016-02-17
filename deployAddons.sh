@@ -18,11 +18,13 @@
 
 set -e
 
-KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
-source "config-default.sh"
-KUBECTL="${KUBE_ROOT}/cluster/kubectl.sh"
-export KUBECTL_PATH="${KUBE_ROOT}/cluster/ubuntu/binaries/kubectl"
-export KUBE_CONFIG_FILE=${KUBE_CONFIG_FILE:-${KUBE_ROOT}/cluster/ubuntu/config-default.sh}
+DNS_SERVER_IP=${DNS_SERVER_IP:-"192.168.3.10"}
+DNS_DOMAIN=${DNS_DOMAIN:-"cluster.local"}
+DNS_REPLICAS=${DNS_REPLICAS:-1}
+KUBE_API=${KUBE_API:-"192.168.100.11:8080"}
+
+PRJ_ROOT=$(dirname "${BASH_SOURCE}")/
+KUBECTL="kubectl -s ${KUBE_API}"
 
 function init {
   echo "Creating kube-system namespace..."
@@ -30,28 +32,30 @@ function init {
   NAMESPACE=`eval "${KUBECTL} get namespaces | grep kube-system | cat"`
 
   if [ ! "$NAMESPACE" ]; then
-    ${KUBECTL} create -f namespace.yaml 
+    ${KUBECTL} create -f namespace.yaml
     echo "The namespace 'kube-system' is successfully created."
   else
     echo "The namespace 'kube-system' is already there. Skipping."
-  fi 
+  fi
 
   echo
 }
 
 function deploy_dns {
   echo "Deploying DNS on Kubernetes"
-  sed -e "s/{{ pillar\['dns_replicas'\] }}/${DNS_REPLICAS}/g;s/{{ pillar\['dns_domain'\] }}/${DNS_DOMAIN}/g;" "${KUBE_ROOT}/cluster/addons/dns/skydns-rc.yaml.in" > skydns-rc.yaml
-  sed -e "s/{{ pillar\['dns_server'\] }}/${DNS_SERVER_IP}/g" "${KUBE_ROOT}/cluster/addons/dns/skydns-svc.yaml.in" > skydns-svc.yaml
+  sed -e "s/{{ pillar\['dns_replicas'\] }}/${DNS_REPLICAS}/g;s/{{ pillar\['dns_domain'\] }}/${DNS_DOMAIN}/g;" "${PRJ_ROOT}/dns/skydns-rc.yaml.in" > skydns-rc.yaml
+  sed -e "s/{{ pillar\['dns_server'\] }}/${DNS_SERVER_IP}/g" "${PRJ_ROOT}/dns/skydns-svc.yaml.in" > skydns-svc.yaml
 
   KUBEDNS=`eval "${KUBECTL} get services --namespace=kube-system | grep kube-dns | cat"`
-      
+
   if [ ! "$KUBEDNS" ]; then
     # use kubectl to create skydns rc and service
-    ${KUBECTL} --namespace=kube-system create -f skydns-rc.yaml 
+    ${KUBECTL} --namespace=kube-system create -f skydns-rc.yaml
     ${KUBECTL} --namespace=kube-system create -f skydns-svc.yaml
 
     echo "Kube-dns rc and service is successfully deployed."
+    rm skydns-rc.yaml
+    rm skydns-svc.yaml
   else
     echo "Kube-dns rc and service is already deployed. Skipping."
   fi
@@ -59,33 +63,55 @@ function deploy_dns {
   echo
 }
 
-function deploy_ui {
-  echo "Deploying Kubernetes UI..."
+function deploy_dashboard {
+  echo "Deploying Kubernetes Dashboard..."
 
-  KUBEUI=`eval "${KUBECTL} get services --namespace=kube-system | grep kube-ui | cat"`
+  KUBEUI=`eval "${KUBECTL} get services --namespace=kube-system | grep kubernetes-dashboard | cat"`
 
   if [ ! "$KUBEUI" ]; then
     # use kubectl to create kube-ui rc and service
     ${KUBECTL} --namespace=kube-system create \
-        -f ${KUBE_ROOT}/cluster/addons/kube-ui/kube-ui-rc.yaml
+        -f ${PRJ_ROOT}/dashboard/dashboard-controller.yaml
     ${KUBECTL} --namespace=kube-system create \
-        -f ${KUBE_ROOT}/cluster/addons/kube-ui/kube-ui-svc.yaml
+        -f ${PRJ_ROOT}/dashboard/dashboard-service.yaml
 
-    echo "Kube-ui rc and service is successfully deployed."
+    echo "Kube-dashboard rc and service is successfully deployed."
   else
-    echo "Kube-ui rc and service is already deployed. Skipping."
+    echo "Kube-dashboard rc and service is already deployed. Skipping."
+  fi
+
+  echo
+}
+
+function deploy_fluentd-elasticsearch {
+  echo "Deploying fluentd-elasticsearch..."
+
+  KUBEUI=`eval "${KUBECTL} get services --namespace=kube-system | grep elasticsearch-logging | cat"`
+
+  if [ ! "$KUBEUI" ]; then
+    # use kubectl to create kube-ui rc and service
+    ${KUBECTL} --namespace=kube-system create \
+        -f ${PRJ_ROOT}/fluentd-elasticsearch/es-controller.yaml
+    ${KUBECTL} --namespace=kube-system create \
+        -f ${PRJ_ROOT}/fluentd-elasticsearch/es-service.yaml
+    ${KUBECTL} --namespace=kube-system create \
+        -f ${PRJ_ROOT}/fluentd-elasticsearch/kibana-controller.yaml
+    ${KUBECTL} --namespace=kube-system create \
+        -f ${PRJ_ROOT}/fluentd-elasticsearch/kibana-service.yaml
+    ${KUBECTL} --namespace=kube-system create \
+        -f ${PRJ_ROOT}/fluentd-elasticsearch/fluentd-controller.yaml
+    ${KUBECTL} --namespace=kube-system create \
+        -f ${PRJ_ROOT}/fluentd-elasticsearch/fluentd-service.yaml
+
+    echo "Fluentd-elasticsearch rc and service is successfully deployed."
+  else
+    echo "Fluentd-elasticsearch rc and service is already deployed. Skipping."
   fi
 
   echo
 }
 
 init
-
-if [ "${ENABLE_CLUSTER_DNS}" == true ]; then
-  deploy_dns
-fi
-
-if [ "${ENABLE_CLUSTER_UI}" == true ]; then
-  deploy_ui
-fi
-
+deploy_dns
+deploy_dashboard
+deploy_fluentd-elasticsearch

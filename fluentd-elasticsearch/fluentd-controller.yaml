@@ -1,0 +1,39 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: fluentd-elasticsearch
+  namespace: kube-system
+  labels:
+    app: fluentd
+spec:
+  selector:
+    app: fluentd
+  template:
+    metadata:
+      labels:
+        app: fluentd
+    spec:
+      containers:
+        - name: fluentd-elasticsearch
+          image: daocloud.io/gpx_dev/fluentd-elasticsearch:1.14-systemd
+          resources:
+            limits:
+              cpu: 100m
+          args:
+          - -q
+          volumeMounts:
+          - name: varlog
+            mountPath: /var/log
+          - name: varlibdockercontainers
+            mountPath: /var/lib/docker/containers
+            readOnly: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        # Files in /var/log/containers are soft links to
+        # the actual log files in this directory.
+        hostPath:
+          path: /var/lib/docker/containers

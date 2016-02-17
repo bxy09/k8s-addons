@@ -15,10 +15,10 @@
 .PHONY:	build push
 
 IMAGE = fluentd-elasticsearch
-TAG = 1.14
+TAG = 1.14-systemd
 
-build:	
-	docker build -t gcr.io/google_containers/$(IMAGE):$(TAG) .
+build:
+	docker build -t daocloud.io/gpx_dev/$(IMAGE):$(TAG) .
 
-push:	
-	gcloud docker --server=gcr.io push gcr.io/google_containers/$(IMAGE):$(TAG)
+push:
+	gcloud docker --server=daocloud.io push daocloud.io/gpx_dev/$(IMAGE):$(TAG)

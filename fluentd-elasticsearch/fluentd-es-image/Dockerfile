@@ -22,7 +22,7 @@
 # Please see http://docs.fluentd.org/articles/install-by-deb for more
 # information about installing fluentd using deb package.
 
-FROM ubuntu:14.04
+FROM daocloud.io/library/ubuntu:14.04
 MAINTAINER Alex Robinson "arob@google.com"
 MAINTAINER Jimmi Dyson "jimmidyson@gmail.com"
 
